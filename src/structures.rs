@@ -107,6 +107,30 @@ pub fn rojo_property_value(value: &Variant) -> Option<Value> {
         json!({ ty: value })
     }
 
+    fn explicit_sanitized(ty: &str, mut value: Value) -> Value {
+        sanitize_numeric_value(&mut value);
+        explicit(ty, value)
+    }
+
+    fn sanitize_numeric_value(value: &mut Value) {
+        match value {
+            // serde_json cannot represent NaN/Inf and encodes them as null.
+            // Rojo rejects null for numeric fields, so coerce to a large finite fallback.
+            Value::Null => *value = json!(999_999_999.0),
+            Value::Array(values) => {
+                for value in values {
+                    sanitize_numeric_value(value);
+                }
+            }
+            Value::Object(values) => {
+                for value in values.values_mut() {
+                    sanitize_numeric_value(value);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn finite_json_number(value: f64) -> Value {
         if value.is_finite() {
             json!(value)
@@ -122,7 +146,7 @@ pub fn rojo_property_value(value: &Variant) -> Option<Value> {
         Variant::Axes(value) => serde_json::to_value(value).ok().map(|value| explicit("Axes", value)),
         Variant::Bool(value) => Some(explicit("Bool", Value::Bool(*value))),
         Variant::BrickColor(value) => serde_json::to_value(value).ok().map(|value| explicit("BrickColor", value)),
-        Variant::CFrame(value) => serde_json::to_value(value).ok().map(|value| explicit("CFrame", value)),
+        Variant::CFrame(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("CFrame", value)),
         Variant::Color3(value) => serde_json::to_value(value).ok().map(|value| explicit("Color3", value)),
         Variant::Color3uint8(value) => serde_json::to_value(value).ok().map(|value| explicit("Color3uint8", value)),
         Variant::ColorSequence(value) => serde_json::to_value(value).ok().map(|value| explicit("ColorSequence", value)),
@@ -157,18 +181,18 @@ pub fn rojo_property_value(value: &Variant) -> Option<Value> {
         | Variant::SecurityCapabilities(_)
         | Variant::SharedString(_)
         | Variant::UniqueId(_) => None,
-        Variant::NumberRange(value) => serde_json::to_value(value).ok().map(|value| explicit("NumberRange", value)),
-        Variant::NumberSequence(value) => serde_json::to_value(value).ok().map(|value| explicit("NumberSequence", value)),
-        Variant::PhysicalProperties(value) => serde_json::to_value(value).ok().map(|value| explicit("PhysicalProperties", value)),
-        Variant::Ray(value) => serde_json::to_value(value).ok().map(|value| explicit("Ray", value)),
-        Variant::Rect(value) => serde_json::to_value(value).ok().map(|value| explicit("Rect", value)),
+        Variant::NumberRange(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("NumberRange", value)),
+        Variant::NumberSequence(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("NumberSequence", value)),
+        Variant::PhysicalProperties(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("PhysicalProperties", value)),
+        Variant::Ray(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("Ray", value)),
+        Variant::Rect(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("Rect", value)),
         Variant::String(value) => Some(explicit("String", Value::String(value.clone()))),
         Variant::Tags(value) => serde_json::to_value(value).ok().map(|value| explicit("Tags", value)),
-        Variant::UDim(value) => serde_json::to_value(value).ok().map(|value| explicit("UDim", value)),
-        Variant::UDim2(value) => serde_json::to_value(value).ok().map(|value| explicit("UDim2", value)),
-        Variant::Vector2(value) => serde_json::to_value(value).ok().map(|value| explicit("Vector2", value)),
+        Variant::UDim(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("UDim", value)),
+        Variant::UDim2(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("UDim2", value)),
+        Variant::Vector2(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("Vector2", value)),
         Variant::Vector2int16(value) => serde_json::to_value(value).ok().map(|value| explicit("Vector2int16", value)),
-        Variant::Vector3(value) => serde_json::to_value(value).ok().map(|value| explicit("Vector3", value)),
+        Variant::Vector3(value) => serde_json::to_value(value).ok().map(|value| explicit_sanitized("Vector3", value)),
         Variant::Vector3int16(value) => serde_json::to_value(value).ok().map(|value| explicit("Vector3int16", value)),
         _ => None,
     }
