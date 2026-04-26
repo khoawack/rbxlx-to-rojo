@@ -3,6 +3,7 @@ use rbx_dom_weak::{
     types::{Ref, Variant},
     Instance, WeakDom,
 };
+use serde_json::Value;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
@@ -34,12 +35,14 @@ struct TreeIterator<'a, I: InstructionReader + ?Sized> {
 fn properties_from_instance(
     instance: &Instance,
     include_all_properties: bool,
-) -> BTreeMap<String, Variant> {
+) -> BTreeMap<String, Value> {
     if include_all_properties {
         return instance
             .properties
             .iter()
-            .map(|(name, value)| (name.to_string(), value.clone()))
+            .filter_map(|(name, value)| {
+                rojo_property_value(value).map(|value| (name.to_string(), value))
+            })
             .collect();
     }
 
@@ -68,7 +71,7 @@ fn properties_from_instance(
     instance
         .properties
         .iter()
-        .map(|(name, value)| (name.to_string(), value.clone()))
+        .filter_map(|(name, value)| rojo_property_value(value).map(|value| (name.to_string(), value)))
         .collect()
 }
 
@@ -236,8 +239,11 @@ fn repr_instance<'a>(
                         let mut instructions = Vec::new();
 
                         if !NON_TREE_SERVICES.contains(other_class) {
-                            instructions
-                                .push(Instruction::add_to_tree(&child, new_base.to_path_buf()));
+                            instructions.push(Instruction::add_to_tree(
+                                &child,
+                                new_base.to_path_buf(),
+                                properties_from_instance(child, include_all_properties),
+                            ));
                         }
 
                         if !child.children().is_empty() {
@@ -317,6 +323,10 @@ impl<'a, I: InstructionReader + ?Sized> TreeIterator<'a, I> {
                                         Instruction::partition(
                                             &child,
                                             folder_path.join(&child.name),
+                                            properties_from_instance(
+                                                &child,
+                                                child_inside_starter_gui,
+                                            ),
                                         ),
                                     )
                                 })
